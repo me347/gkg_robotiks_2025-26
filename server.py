@@ -3,50 +3,42 @@ from flask_cors import CORS
 from flask_sockets import Sockets
 
 app = Flask(__name__)
-CORS(app)  # Allow cross-origin requests
+CORS(app)
 sockets = Sockets(app)
 
-# Keep track of connected WebSocket clients
 clients = []
 
-# WebSocket route for ESP32 / frontend
 @sockets.route('/ws')
 def ws_route(ws):
     clients.append(ws)
+    print("Client connected")
     try:
         while not ws.closed:
             msg = ws.receive()
             if msg:
-                print("Received from client:", msg)
+                print("Received:", msg)
     finally:
         clients.remove(ws)
+        print("Client disconnected")
 
-# HTTP POST endpoint for frontend
 @app.route('/command', methods=['POST'])
 def command():
     data = request.get_json()
-    cmd = data.get("action")  # "on" or "off"
+    cmd = data.get("action", "")
+    print("Command from frontend:", cmd)
 
-    # Broadcast command to all connected WebSocket clients
-    for ws in clients:
+    for ws in list(clients):
         try:
             ws.send(cmd)
         except:
-            pass  # ignore broken connections
+            clients.remove(ws)
 
     return jsonify({"status": "ok", "command": cmd})
 
-# Optional GET endpoint
-@app.route('/command', methods=['GET'])
-def get_command():
-    return jsonify({"command": "unknown"})  # you can store last command if needed
-
 if __name__ == "__main__":
-    import os
-    port = int(os.environ.get("PORT", 10000))  # Render provides PORT env
     from gevent import pywsgi
     from geventwebsocket.handler import WebSocketHandler
-
+    port = 5000
+    print(f"Server running on http://0.0.0.0:{port}")
     server = pywsgi.WSGIServer(("0.0.0.0", port), app, handler_class=WebSocketHandler)
-    print(f"Server running on port {port}")
     server.serve_forever()
