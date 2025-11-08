@@ -6,22 +6,26 @@ app = Flask(__name__)
 CORS(app)
 socketio = SocketIO(app, cors_allowed_origins="*")
 
+# store current command
 command = None
 
 @app.route('/command', methods=['POST'])
 def set_command():
     global command
     data = request.get_json()
-    command = data.get('action')
-    # immediately send the command to all connected clients
-    socketio.emit('command_update', {'command': command})
-    return jsonify({'status': 'ok', 'command': command})
+    command = data.get("action")  # e.g., "on" or "off"
+
+    # push the command to all connected WebSocket clients
+    socketio.emit("command_update", {"command": command})
+
+    return jsonify({"status": "ok", "command": command})
 
 @app.route('/command', methods=['GET'])
 def get_command():
-    return jsonify({'command': command})
+    return jsonify({"command": command})
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     import os
     port = int(os.environ.get("PORT", 10000))
-    socketio.run(app, host='0.0.0.0', port=port)
+    # start Flask-SocketIO instead of normal Flask
+    socketio.run(app, host="0.0.0.0", port=port)
