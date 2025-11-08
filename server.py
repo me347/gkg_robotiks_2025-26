@@ -1,43 +1,53 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-from flask_socketio import SocketIO, emit
-import os
+from flask_sockets import Sockets
 
-# ===== Flask setup =====
 app = Flask(__name__)
 CORS(app)  # Allow cross-origin requests
-socketio = SocketIO(app, cors_allowed_origins="*")  # WebSocket support
+sockets = Sockets(app)
 
-# ===== In-memory command store =====
-command = None
+# Keep track of connected WebSocket clients
+clients = []
 
-# ===== HTTP endpoints =====
+# WebSocket route for ESP32
+@sockets.route('/ws')
+def ws_route(ws):
+    clients.append(ws)
+    try:
+        while not ws.closed:
+            msg = ws.receive()
+            if msg:
+                print("Received from client:", msg)
+    finally:
+        clients.remove(ws)
+
+# HTTP POST endpoint for frontend
 @app.route('/command', methods=['POST'])
-def set_command():
-    """
-    Receive command from frontend (POST request) and broadcast
-    to all connected WebSocket clients (ESP32, other frontends)
-    """
-    global command
+def command():
     data = request.get_json()
-    command = data.get("action")  # expected "on" or "off"
+    cmd = data.get("action")  # "on" or "off"
 
-    # Emit to all WebSocket clients instantly
-    socketio.emit("command_update", {"command": command})
-    return jsonify({"status": "ok", "command": command})
+    # Broadcast command to all connected WebSocket clients
+    for ws in clients:
+        try:
+            ws.send(cmd)
+        except:
+            pass  # ignore broken connections
 
+    return jsonify({"status": "ok", "command": cmd})
+
+# Optional GET endpoint
 @app.route('/command', methods=['GET'])
 def get_command():
-    """
-    Optional: let clients poll for the current command
-    """
-    return jsonify({"command": command})
+    return jsonify({"command": "unknown"})  # you can store last command if needed
 
-# ===== Main =====
 if __name__ == "__main__":
+    import os
     port = int(os.environ.get("PORT", 10000))
+    from gevent import pywsgi
+    from geventwebsocket.handler import WebSocketHandler
 
-    # Run with Eventlet for low-latency WebSockets
-    # Install eventlet in requirements.txt: flask, flask-cors, flask-socketio, eventlet
-    import eventlet
-    socketio.run(app, host="0.0.0.0", port=port)
+    # Use gevent WebSocket server
+    server = pywsgi.WSGIServer(("0.0.0.0", port), app, handler_class=WebSocketHandler)
+    print(f"Server running on port {port}")
+    server.serve_forever()
