@@ -3,17 +3,16 @@ from flask_cors import CORS
 from flask_sockets import Sockets
 
 app = Flask(__name__)
-CORS(app)
+CORS(app)  # Allow cross-origin requests
 sockets = Sockets(app)
 
 # Keep track of connected WebSocket clients
 clients = []
 
-# WebSocket route for ESP32
+# WebSocket route for ESP32 / frontend
 @sockets.route('/ws')
 def ws_route(ws):
     clients.append(ws)
-    print("Client connected. Total clients:", len(clients))
     try:
         while not ws.closed:
             msg = ws.receive()
@@ -21,7 +20,6 @@ def ws_route(ws):
                 print("Received from client:", msg)
     finally:
         clients.remove(ws)
-        print("Client disconnected. Total clients:", len(clients))
 
 # HTTP POST endpoint for frontend
 @app.route('/command', methods=['POST'])
@@ -41,11 +39,11 @@ def command():
 # Optional GET endpoint
 @app.route('/command', methods=['GET'])
 def get_command():
-    return jsonify({"command": "unknown"})
+    return jsonify({"command": "unknown"})  # you can store last command if needed
 
 if __name__ == "__main__":
     import os
-    port = int(os.environ.get("PORT", 10000))
+    port = int(os.environ.get("PORT", 10000))  # Render provides PORT env
     from gevent import pywsgi
     from geventwebsocket.handler import WebSocketHandler
 
