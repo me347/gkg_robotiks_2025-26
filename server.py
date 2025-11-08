@@ -1,7 +1,9 @@
 import os
 from flask import Flask, request, jsonify
+from flask_cors import CORS
 
 app = Flask(__name__)
+CORS(app)  # allow requests from any origin
 
 # Store the latest command
 command = None
@@ -13,7 +15,6 @@ def set_command():
     data = request.get_json()
     if not data or 'action' not in data:
         return jsonify({'status': 'error', 'message': 'No action provided'}), 400
-
     command = data['action']
     return jsonify({'status': 'ok', 'command': command})
 
@@ -22,12 +23,10 @@ def get_command():
     """Return the latest command for the ESP32 to read"""
     return jsonify({'command': command})
 
-# Optional root route to check if backend is running
 @app.route('/')
 def index():
     return "ESP32 backend is running!"
 
 if __name__ == '__main__':
-    # Use the Render-provided port or default to 10000 locally
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
