@@ -1,43 +1,22 @@
-from flask import Flask, request, jsonify
-from flask_cors import CORS
-from flask_sockets import Sockets
+from flask import Flask, request
+from flask_socketio import SocketIO, emit
 
 app = Flask(__name__)
-CORS(app)
-sockets = Sockets(app)
+socketio = SocketIO(app, cors_allowed_origins="*")  # allow cross-origin requests
 
-clients = []
-
-# WebSocket route for ESP32
-@sockets.route('/ws')
-def ws_route(ws):
-    clients.append(ws)
-    try:
-        while not ws.closed:
-            msg = ws.receive()  # optional for two-way messages
-            if msg:
-                print("Received from ESP32:", msg)
-    finally:
-        clients.remove(ws)
-
-# HTTP POST endpoint for frontend
+# HTTP endpoint for frontend buttons
 @app.route('/command', methods=['POST'])
 def command():
     data = request.get_json()
-    cmd = data.get("action")
-    for ws in clients:
-        try:
-            ws.send(cmd)  # send "on" or "off"
-        except:
-            pass
-    return jsonify({"status": "ok", "command": cmd})
+    cmd = data.get("action")  # "on" or "off"
 
-if __name__ == "__main__":
-    import os
-    port = int(os.environ.get("PORT", 5000))
-    from gevent import pywsgi
-    from geventwebsocket.handler import WebSocketHandler
+    # Broadcast command to all connected SocketIO clients (ESP32)
+    socketio.emit("command", {"action": cmd})
+    return {"status": "ok", "command": cmd}
 
-    server = pywsgi.WSGIServer(("0.0.0.0", port), app, handler_class=WebSocketHandler)
-    print(f"Server running on port {port}")
-    server.serve_forever()
+@socketio.on("connect")
+def handle_connect():
+    print("Client connected")
+
+@socketio.on("disconnect")
+def handle_disconnect
